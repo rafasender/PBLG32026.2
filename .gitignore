@@ -1,0 +1,39 @@
+# Arquivos gerados pelo Julia / Pkg
+Manifest.toml
+# Observação: Se a equipe desejar congelar os hashes exatos entre SOs (Linux/Mac/Windows),
+# pode versionar o Manifest.toml. Por padrão em Pkg, mantemos flexível com Project.toml.
+
+# Compilação e caches do Julia
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+*.jl.*.mem
+
+# Ambientes locais e credenciais (ex: PhysioNet tokens)
+.env
+.env.*
+secrets.toml
+credentials.json
+
+# Dados brutos e processados do MIMIC-IV (não versionar dados sensíveis/pesados)
+/data/raw/*
+!/data/raw/.gitkeep
+/data/processed/*
+!/data/processed/.gitkeep
+
+# Saídas e plots temporários
+/output/*
+!/output/.gitkeep
+
+# IDEs e Editores
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Checkpoints de Notebooks
+.ipynb_checkpoints/
+.pluto.jl

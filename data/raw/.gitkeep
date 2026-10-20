@@ -1,0 +1,2 @@
+# Diretório para dados brutos (ex: extrações brutas do MIMIC-IV via PhysioNet)
+# Observação: Arquivos de dados (.csv, .parquet) são ignorados pelo .gitignore para não sobrecarregar o git.
