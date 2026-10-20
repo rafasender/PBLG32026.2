@@ -93,7 +93,7 @@ julia setup_environment.jl
 ## 🧪 Verificação e Demonstração
 
 ### Teste de Sanidade do Ambiente
-Para verificar se todos os pacotes do ecossistema SciML, tratamento de dados e gráficos estão operacionais:
+Para verificar se todos os pacotes do ecossistema SciML, tratamento de dados e gráficos estão operacionais, execute:
 ```bash
 julia scripts/check_env.jl
 ```
