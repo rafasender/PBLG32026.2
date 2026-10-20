@@ -34,15 +34,14 @@ Desenvolver um **modelo matemático-computacional 0D (parâmetros concentrados t
 ## 📂 Estrutura do Repositório
 
 ```text
-├── .gitignore               # Ignora temporários, Manifest e dados brutos pesados
+├── .gitignore               # Ignora temporários, dados tabulares e arquivos sensíveis
 ├── Project.toml             # Manifesto de dependências do ambiente Julia
-├── Manifest.toml            # Árvore exata de versões resolvidas (gerado localmente)
-├── setup_environment.jl     # Script automatizado de instalação das dependências
+├── Manifest.toml            # Árvore exata de versões resolvidas (versionado para reprodutibilidade)
+├── setup_environment.jl     # Script automatizado de instanciação do ambiente
 ├── README.md                # Este documento
 ├── data/
 │   ├── raw/                 # Extrações brutas do MIMIC-IV (chartevents, inputevents, etc.)
 │   └── processed/           # Coortes filtradas e séries temporais alinhadas
-├── docs/                    # Documentação técnica, artigos de referência e notas clínicas
 ├── output/                  # Gráficos gerados, curvas de pressão e relatórios
 ├── scripts/
 │   ├── check_env.jl         # Smoke test: verifica carregamento de todos os pacotes
@@ -58,7 +57,7 @@ Desenvolver um **modelo matemático-computacional 0D (parâmetros concentrados t
 ## 🚀 Instalação e Configuração do Ambiente
 
 ### 1. Pré-requisitos
-- **Julia** (versão 1.10 ou superior):
+- **Julia** (versão mínima v1.10 LTS; recomenda-se combinar e padronizar a mesma versão menor de Julia no grupo):
   - No Windows, recomenda-se instalar via terminal utilizando o **Juliaup**:
     ```powershell
     winget install Julialang.Juliaup
@@ -77,13 +76,13 @@ cd PBLG32026.2
 ```
 
 ### 3. Instanciar o Ambiente de Dependências
-Para garantir que todos os membros do grupo utilizem exatamente as mesmas versões de bibliotecas, execute no terminal:
+Para garantir que todos os membros do grupo utilizem exatamente as mesmas versões de bibliotecas registradas no `Manifest.toml`, execute no terminal:
 
 ```bash
 julia --project=. -e "using Pkg; Pkg.instantiate(); Pkg.precompile()"
 ```
 
-Ou execute o script interativo de configuração:
+Ou execute o script automatizado de configuração:
 ```bash
 julia setup_environment.jl
 ```
@@ -99,13 +98,13 @@ julia scripts/check_env.jl
 ```
 
 ### Executar a Suíte de Testes Unitários
+Como o projeto está estruturado como um ambiente de aplicação com módulo local (sem UUID de pacote registrado no `Project.toml`), execute a suíte diretamente via:
 ```bash
 julia --project=. test/runtests.jl
 ```
-*(ou via REPL do Julia: digite `]` para entrar no modo Pkg e execute `test`)*
 
 ### Executar a Simulação Demonstrativa (Windkessel 2 Elementos)
-Simula a curva de pressão aórtica em normovolemia vs. choque hipovolêmico com taquicardia e vasoconstrição reflexa, gerando a figura em `output/demo_windkessel2.png`:
+Simula a curva de pressão aórtica em normovolemia vs. choque hipovolêmico compensado (com resposta reflexa simpática, redução do volume sistólico e aumento de RVS), gerando a figura em `output/demo_windkessel2.png`:
 ```bash
 julia scripts/demo_windkessel2.jl
 ```

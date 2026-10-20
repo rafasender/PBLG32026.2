@@ -33,13 +33,20 @@ end
     blood_viscosity(hct::Real; mu_plasma=1.20)
 
 Calcula a viscosidade sanguínea efetiva μ (em cP) em função do hematócrito (Hct).
-Baseado nas formulações reológicas da literatura hemodinâmica (Pries et al., 1992):
-μ(Hct) aumenta exponencialmente/não linearmente com o hematócrito.
-Para a faixa fisiológica padrão:
-μ ≈ μ_plasma * exp(2.5 * Hct)
+
+[PLACEHOLDER - Entregável B.2]:
+Aproximação inicial para escoamento macroscópico baseada no coeficiente de Einstein (2.5)
+para suspensões: μ ≈ μ_plasma * exp(2.5 * Hct).
+Para Hct = 40%, fornece ~3.26 cP (faixa fisiológica razoável para sangue total em grandes vasos).
+
+*Nota metodológica*: As equações empíricas completas de Pries et al. (1992) descrevem a
+viscosidade aparente in vivo levando em consideração também o diâmetro do vaso (D) e o
+efeito Fåhræus-Lindqvist. A formulação analítica detalhada com diâmetros e referências
+será integrada na entrega B.2 pela Frente B.
 """
 function blood_viscosity(hct::Real; mu_plasma::Real=1.20)
-    # Modelo exponencial validado para hemodiluição e policitemia moderada
+    # Placeholder analítico: relação exponencial aproximada (coeficiente de Einstein)
+    # Sujeito a refinamento com a formulação completa da Frente B (Entregável B.2)
     return mu_plasma * exp(2.5 * hct)
 end
 

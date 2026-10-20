@@ -31,6 +31,13 @@ catch e
     println("   [FALHA] Optimization: $e")
 end
 
+try
+    @time using SciMLSensitivity
+    println("   [OK] SciMLSensitivity carregado com sucesso.")
+catch e
+    println("   [FALHA] SciMLSensitivity: $e")
+end
+
 println("\n2. Testando importação dos pacotes de análise de dados (MIMIC-IV)...")
 try
     @time using DataFrames

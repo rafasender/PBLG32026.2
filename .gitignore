@@ -1,8 +1,3 @@
-# Arquivos gerados pelo Julia / Pkg
-Manifest.toml
-# Observação: Se a equipe desejar congelar os hashes exatos entre SOs (Linux/Mac/Windows),
-# pode versionar o Manifest.toml. Por padrão em Pkg, mantemos flexível com Project.toml.
-
 # Compilação e caches do Julia
 *.jl.cov
 *.jl.*.cov
@@ -15,7 +10,10 @@ Manifest.toml
 secrets.toml
 credentials.json
 
-# Dados brutos e processados do MIMIC-IV (não versionar dados sensíveis/pesados)
+# Proteção de dados do MIMIC-IV e arquivos tabulares pesados/sensíveis
+*.csv
+*.csv.gz
+*.parquet
 /data/raw/*
 !/data/raw/.gitkeep
 /data/processed/*
