@@ -72,8 +72,8 @@ Desenvolver um **modelo matemático-computacional 0D (parâmetros concentrados t
 
 ### 2. Clonar o Repositório
 ```bash
-git clone <URL_DO_REPOSITORIO>
-cd "PBL 2026.2"
+git clone https://github.com/rafasender/PBLG32026.2.git
+cd PBLG32026.2
 ```
 
 ### 3. Instanciar o Ambiente de Dependências
