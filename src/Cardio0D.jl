@@ -12,9 +12,28 @@ Frentes integradas:
 """
 module Cardio0D
 
-export BloodProperties, blood_viscosity
+using DifferentialEquations
+using LinearAlgebra
+using CSV, DataFrames
+
+export BloodProperties, blood_viscosity, blood_viscosity_krieger
 export Windkessel2Params, windkessel2_ode!, simulate_windkessel2
 export calculate_map
+# parâmetros e fisiologia
+export CircParams, baseline_params, with_params, lpm_to_mls, mls_to_lpm, cmH2O_to_mmHg
+export Scenario, window_rate, activation, elastance, valve_flow
+# modelos
+export mean_rhs!, simulate_mean, initial_state_mean, mean_observables, mean_hemodynamics
+export operating_point, oxygen_delivery
+export pulsatile_rhs!, simulate_pulsatile, initial_state_pulsatile, pulsatile_observables
+# análise
+export time_mean, cycle_metrics, last_beats, venous_return_curve, cardiac_output_curve
+export guyton_intersection, pv_loop
+# dados e calibração
+export PatientData, load_patient, build_patient, synthetic_patient, write_patient_csv
+export read_mimic_table, scenario_from_patient, step_function, linear_function
+export calibrate, simulate_patient, sensitivity_matrix, rmse, settled_state
+export MIMIC_ITEMIDS
 
 """
     BloodProperties(hct, mu_plasma)
@@ -103,5 +122,24 @@ function calculate_map(times, pressures)
     end
     return integral / dt_total
 end
+
+"""
+    blood_viscosity_krieger(hct; mu_plasma=1.20, hct_max=0.62, intrinsic=2.5)
+
+Alternativa tipo Krieger–Dougherty: `μ = μ_pl·(1 − Hct/Hct_max)^(−[η]·Hct_max)`.
+Cresce mais rápido que a exponencial para Hct alto; para a decisão final ver entregável B.2.
+"""
+function blood_viscosity_krieger(hct::Real; mu_plasma::Real=1.20, hct_max::Real=0.62,
+                                 intrinsic::Real=2.5)
+    return mu_plasma * (1 - hct / hct_max)^(-intrinsic * hct_max)
+end
+
+include("params.jl")
+include("physiology.jl")
+include("mean_model.jl")
+include("closed_loop.jl")
+include("analysis.jl")
+include("data_io.jl")
+include("calibration.jl")
 
 end # module Cardio0D
