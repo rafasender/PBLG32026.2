@@ -35,3 +35,12 @@ desktop.ini
 # Checkpoints de Notebooks
 .ipynb_checkpoints/
 .pluto.jl
+
+# Artefatos de execução e dados derivados
+*.log
+*.jld2
+*.bson
+*.tmp
+*.swp
+/docs/build/
+.julia/

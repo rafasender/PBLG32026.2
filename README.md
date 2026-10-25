@@ -266,3 +266,19 @@ Se preferir usar o editor visualmente:
 3. **Pries, A. R. et al.** Blood viscosity in tube flow: dependence on diameter and hematocrit. *Am J Physiol*, 1992.
 4. **Westerhof, N. et al.** The arterial Windkessel. *Med Biol Eng Comput*, v. 47, n. 2, p. 131–141, 2009.
 5. **Johnson, A. E. W. et al.** MIMIC-IV, a freely accessible electronic health record dataset. *Sci Data*, 2023.
+
+
+---
+
+## Modelo implementado (resumo)
+
+O módulo `Cardio0D` (`src/`) contém o modelo 0D em malha fechada (pulsátil e de valores médios),
+hemorragia, terapias (Ringer Lactato, sangue total, vasopressor), barorreflexo, leitura do
+esquema MIMIC-IV e calibração. Veja o [relatório](docs/RELATORIO.md) e o guia matemático
+[CLAUDE.md](CLAUDE.md).
+
+```bash
+julia --project=. test/runtests.jl                 # 85 testes (~25 s)
+julia --project=. scripts/run_model.jl             # figuras e tabelas em docs/
+julia --project=. scripts/calibrate_synthetic.jl   # calibração com paciente sintético (~6 min)
+```
