@@ -20,6 +20,25 @@ using Cardio0D
         # Teste com struct BloodProperties
         bp = BloodProperties(hct=0.45, mu_plasma=1.25)
         @test blood_viscosity(bp) ≈ 1.25 * exp(2.5 * 0.45)
+
+        # Pries et al. (1992): Hct 0,45 em vaso grande dá μ_rel = μ_0.45 ≈ 3,19 (→ 3,2 quando D → ∞)
+        @test isapprox(blood_viscosity_pries(0.45; D=1000.0, invivo=false) / 1.20, 3.19, atol=0.01)
+        @test blood_viscosity_pries(0.0; D=100.0, invivo=false) ≈ 1.20   # sem hemácias: plasma
+        # valores da tabela B.2 (Frente B), μ_rel com Hct = 0,40
+        @test isapprox(blood_viscosity_pries(0.40; D=1000.0, invivo=false) / 1.2, 2.80; atol=0.01)
+        @test isapprox(blood_viscosity_pries(0.40; D=100.0) / 1.2, 2.26; atol=0.01)
+        @test isapprox(blood_viscosity_pries(0.40; D=50.0) / 1.2, 2.06; atol=0.01)
+        # hemodiluição 40 % -> 25 %: razão 0,687 (vaso grande) e 0,733 (D = 100 µm in vivo)
+        @test isapprox(blood_viscosity(0.25) / blood_viscosity(0.40), 0.687; atol=0.001)
+        @test isapprox(blood_viscosity_pries(0.25; D=100.0) / blood_viscosity_pries(0.40; D=100.0), 0.733; atol=0.001)
+        # a razão μ(Hct)/μ(0,42) do modelo ≈ Pries em vaso grande (3%) para Hct 0,15–0,55
+        for h in 0.15:0.05:0.55
+            r_exp = blood_viscosity(h) / blood_viscosity(0.42)
+            r_pr = blood_viscosity_pries(h; D=1000.0, invivo=false) / blood_viscosity_pries(0.42; D=1000.0, invivo=false)
+            @test isapprox(r_exp, r_pr; rtol=0.03)
+        end
+        # Fåhræus–Lindqvist: em microvasos o Hct pesa menos
+        @test blood_viscosity_pries(0.42; D=30.0) < blood_viscosity_pries(0.42; D=1000.0, invivo=false)
     end
 
     @testset "Parâmetros do Windkessel de 2 Elementos" begin
@@ -183,7 +202,9 @@ end
     @test isapprox(m.PAM, m2.PAM; atol=0.2)
     # faixas fisiológicas (V8)
     @test 80 < m.PAM < 100
-    @test 100 < m.PAS < 135 && 60 < m.PAD < 85
+    # Csa = 2,5 mL/mmHg (tabela B.2) dá pressão de pulso ~20 mmHg (< ~40 clínico): limitação do
+    # 0D de 2 elementos, o alvo do projeto é a PAM (CLAUDE.md §1). Por isso PAS > 90, não 100.
+    @test 90 < m.PAS < 135 && 60 < m.PAD < 85
     @test 4.3 < m.CO < 6.0
     @test 55 < m.SV < 85
     @test 0.5 < m.EF < 0.75
@@ -273,7 +294,9 @@ end
     @test fit.rmse < r0
     @test fit.rmse < 2.5
     # janela curta só com cristaloide: Rsa e Vb0 se compensam (identificabilidade parcial);
-    # o volume inicial é bem determinado, a resistência só aproximadamente
-    @test isapprox(fit.θ[2], ptrue.Vb0; rtol=0.05)
-    @test isapprox(fit.θ[1], ptrue.Rsa; rtol=0.25)
+    # o volume inicial é razoavelmente determinado, a resistência só grosseiramente.
+    # Com os parâmetros da B.2 (Csv = 160, mais volume estressado) a PAM é menos sensível ao
+    # volume e a identificabilidade piora: antes 5 %/25 %, agora 15 %/50 % (ver docs/RELATORIO.md).
+    @test isapprox(fit.θ[2], ptrue.Vb0; rtol=0.15)
+    @test isapprox(fit.θ[1], ptrue.Rsa; rtol=0.50)
 end

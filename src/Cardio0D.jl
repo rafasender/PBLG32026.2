@@ -16,7 +16,7 @@ using DifferentialEquations
 using LinearAlgebra
 using CSV, DataFrames
 
-export BloodProperties, blood_viscosity, blood_viscosity_krieger
+export BloodProperties, blood_viscosity, blood_viscosity_krieger, blood_viscosity_pries
 export Windkessel2Params, windkessel2_ode!, simulate_windkessel2
 export calculate_map
 # parâmetros e fisiologia
@@ -53,19 +53,16 @@ end
 
 Calcula a viscosidade sanguínea efetiva μ (em cP) em função do hematócrito (Hct).
 
-[PLACEHOLDER - Entregável B.2]:
-Aproximação inicial para escoamento macroscópico baseada no coeficiente de Einstein (2.5)
-para suspensões: μ ≈ μ_plasma * exp(2.5 * Hct).
-Para Hct = 40%, fornece ~3.26 cP (faixa fisiológica razoável para sangue total em grandes vasos).
+Relação adotada no modelo (entregável 1.5): μ = μ_plasma·exp(2.5·Hct), com coeficiente de
+Einstein 2.5. Para Hct = 40%, dá ~3.26 cP (sangue total em vasos grandes).
 
-*Nota metodológica*: As equações empíricas completas de Pries et al. (1992) descrevem a
-viscosidade aparente in vivo levando em consideração também o diâmetro do vaso (D) e o
-efeito Fåhræus-Lindqvist. A formulação analítica detalhada com diâmetros e referências
-será integrada na entrega B.2 pela Frente B.
+O modelo só usa a **razão** `μ(Hct)/μ(Hct_ref)` (E18), e essa razão coincide com a de
+[`blood_viscosity_pries`](@ref) em vaso grande (D = 1000 µm) dentro de 3% para Hct entre 0,15
+e 0,55 (ver `docs/viscosidade.md`). Em microvasos (D = 30–100 µm) o efeito Fåhræus–Lindqvist
+torna a resposta ao Hct mais fraca: use `blood_viscosity_pries(hct; D)` para a análise de
+sensibilidade.
 """
 function blood_viscosity(hct::Real; mu_plasma::Real=1.20)
-    # Placeholder analítico: relação exponencial aproximada (coeficiente de Einstein)
-    # Sujeito a refinamento com a formulação completa da Frente B (Entregável B.2)
     return mu_plasma * exp(2.5 * hct)
 end
 
@@ -127,11 +124,48 @@ end
     blood_viscosity_krieger(hct; mu_plasma=1.20, hct_max=0.62, intrinsic=2.5)
 
 Alternativa tipo Krieger–Dougherty: `μ = μ_pl·(1 − Hct/Hct_max)^(−[η]·Hct_max)`.
-Cresce mais rápido que a exponencial para Hct alto; para a decisão final ver entregável B.2.
+**Não recomendada com os valores padrão**: superestima a viscosidade (≈ 6 cP em Hct 0,40 e
+≈ 35 cP em 0,55, contra ≈ 3,4 e 5,0 cP de Pries) porque sangue exige `[η]·Hct_max` bem
+menor que 1,55. Mantida só para comparação (`docs/viscosidade.md`).
 """
 function blood_viscosity_krieger(hct::Real; mu_plasma::Real=1.20, hct_max::Real=0.62,
                                  intrinsic::Real=2.5)
     return mu_plasma * (1 - hct / hct_max)^(-intrinsic * hct_max)
+end
+
+"""
+    blood_viscosity_pries(hct; D=100.0, mu_plasma=1.20, invivo=true)
+
+Viscosidade aparente do sangue de Pries et al. em cP, para um vaso de diâmetro `D` [µm] e
+hematócrito de descarga `hct`. Forma comum:
+
+```
+μ_rel = 1 + (μ_0.45 − 1)·((1 − Hct)^C − 1)/((1 − 0,45)^C − 1)
+C     = (0,8 + exp(−0,075·D))·(−1 + 1/(1 + 1e-11·D¹²)) + 1/(1 + 1e-11·D¹²)
+```
+
+- `invivo=false` — tubos de vidro (Pries, Neuhaus & Gaehtgens 1992, Am J Physiol 263:H1770):
+  `μ_0.45 = 220·exp(−1,3·D) + 3,2 − 2,44·exp(−0,06·D^0,645)`.
+- `invivo=true` — microvasos (Pries et al. 1994, Circ Res 75:904):
+  `μ_0.45 = 6·exp(−0,085·D) + 3,2 − 2,44·exp(−0,06·D^0,645)` e
+  `μ_rel,vivo = [1 + (μ_0.45 − 1)·(…)·(D/(D−1,1))²]·(D/(D−1,1))²` (camada de superfície do
+  endotélio).
+
+`μ = μ_pl·μ_rel`. Para D grande (≳ 300 µm) as duas versões coincidem. Fonte das fórmulas:
+tabela B.2 da Frente B (valores conferidos em `docs/viscosidade.md`).
+"""
+function blood_viscosity_pries(hct::Real; D::Real=100.0, mu_plasma::Real=1.20, invivo::Bool=true)
+    μ045 = (invivo ? 6 * exp(-0.085 * D) : 220 * exp(-1.3 * D)) + 3.2 - 2.44 * exp(-0.06 * D^0.645)
+    g = 1 / (1 + 1e-11 * D^12)
+    C = (0.8 + exp(-0.075 * D)) * (-1 + g) + g
+    shape = ((1 - hct)^C - 1) / ((1 - 0.45)^C - 1)
+    if invivo
+        f = (D / (D - 1.1))^2
+        μrel = (1 + (μ045 - 1) * shape * f) * f
+    else
+        μrel = 1 + (μ045 - 1) * shape
+    end
+    return mu_plasma * μrel
 end
 
 include("params.jl")

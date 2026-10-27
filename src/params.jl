@@ -24,8 +24,8 @@ Grupos de campos:
 Base.@kwdef struct CircParams{T<:Real}
     HR::T = 75.0
     # circulação sistêmica
-    Rsa::T = 1.0;   Csa::T = 1.5;    V0sa::T = 600.0
-    Rsv::T = 0.03;  Csv::T = 100.0;  V0sv::T = 2500.0
+    Rsa::T = 1.0;   Csa::T = 2.5;    V0sa::T = 600.0
+    Rsv::T = 0.03;  Csv::T = 160.0;  V0sv::T = 2200.0
     # circulação pulmonar
     Rpa::T = 0.08;  Cpa::T = 4.0;    V0pa::T = 150.0
     Cpv::T = 10.0;  V0pv::T = 350.0
@@ -38,8 +38,8 @@ Base.@kwdef struct CircParams{T<:Real}
     Rvalv::T = 0.005; kvalv::T = 10.0; Pth::T = -4.0
     sveno::T = 0.25                 # suavidade do colapso venoso [mmHg]
     Vheart::T = 175.0               # volume médio dos ventrículos (só no modelo lento)
-    Vb_ref::T = 4800.0              # volume sanguíneo de referência (normovolemia)
-    Vb0::T = 4800.0                 # volume sanguíneo no início da simulação
+    Vb_ref::T = 4700.0              # volume sanguíneo de referência (normovolemia)
+    Vb0::T = 4700.0                # volume sanguíneo no início da simulação
     # sangue e líquido intersticial
     Hct_ref::T = 0.42; mu_plasma::T = 1.2
     kf::T = 1 / (25 * 60)           # 1/s  (equilíbrio capilar ~25 min)
@@ -74,11 +74,15 @@ Projeta o estado basal a partir de **alvos hemodinâmicos** (adulto ~70 kg):
 resistências pela lei de Ohm, e complacências/elastâncias do coração pelas equações
 `EDV − Vd = C_D·(P_f − P_th)` e `ESV − Vd = C_S·(P_pós − P_th)` (CLAUDE.md §4).
 O resultado reproduz exatamente os alvos no modelo "lento" (equilíbrio algébrico).
+
+Complacências e volumes seguem a tabela B.2 da Frente B (PDF "Parâmetros de referência e relação hematócrito–viscosidade"):
+`Csa = 2,5` (Thenappan et al. 2016); `Csv = 160` (faixa 140–235, nota 3 da B.2);
+V₀ total ≈ 3300 mL (`V0sa + V0sv + V0pa + V0pv`); volume sanguíneo total ≈ 4700 mL (derivado).
 """
 function baseline_params(; HR=75.0, MAP=93.0, CVP=5.0, RAP=2.5, Ppa=15.0, LAP=8.0, CO=5.25,
                          Pth=-4.0, EDV_L=120.0, ESV_L=50.0, EDV_R=125.0, ESV_R=55.0, Vd=10.0,
-                         dPesL=7.0, dPesR=4.0, Csa=1.5, Csv=100.0, Cpa=4.0, Cpv=10.0,
-                         V0sa=600.0, V0sv=2500.0, V0pa=150.0, V0pv=350.0,
+                         dPesL=7.0, dPesR=4.0, Csa=2.5, Csv=160.0, Cpa=4.0, Cpv=10.0,
+                         V0sa=600.0, V0sv=2200.0, V0pa=150.0, V0pv=350.0,
                          Rvalv=0.005, kvalv=10.0, overrides...)
     Q = lpm_to_mls(CO)
     Rsa = (MAP - CVP) / Q
