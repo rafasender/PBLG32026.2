@@ -101,6 +101,9 @@ pb = plot(t_min, res3[true].CO, label="ON", xlabel="Tempo (min)", ylabel="CO (L/
 plot!(pb, t_min, res3[false].CO, label="OFF", linestyle=:dash)
 pc = plot(t_min, res3[true].HR, label="ON", xlabel="Tempo (min)", ylabel="FC (bpm)", title="Frequência cardíaca")
 plot!(pc, t_min, res3[false].HR, label="OFF", linestyle=:dash)
+for (panel, event_label) in ((pa, "Hemorragia (1–11 min)"), (pb, ""), (pc, ""))
+    vline!(panel, [1, 11], label=event_label, color=:black, linestyle=:dot, lw=1.5)
+end
 savefig(plot(pa, pb, pc; layout=(1, 3), size=(1500, 440)), joinpath(FIGDIR, "03_hemorragia_barorreflexo.png"))
 out("| | PAM mín (mmHg) | CO mín (L/min) | FC máx (bpm) | PAM aos 60 min |\n|---|---|---|---|---|")
 for baro in (false, true)
@@ -128,6 +131,7 @@ for (cl, vol) in (("I", 600.0), ("II", 1000.0), ("III", 1500.0), ("IV", 2000.0))
     out(@sprintf("| %s | %d | %.0f | %.2f | %.0f |", cl, vol, o.PAM[i], o.CO[i], o.HR[i]))
 end
 hline!(pcl, [65], label="PAM 65", color=:gray, linestyle=:dot)
+vline!(pcl, [1, 11], label="Hemorragia (1–11 min)", color=:black, linestyle=:dot, lw=1.5)
 savefig(pcl, joinpath(FIGDIR, "04_classes_hemorragia.png"))
 out("")
 
@@ -169,6 +173,15 @@ for (nm, _...) in terapias
     for (k, y) in enumerate((o.PAM, o.CO, o.Hct, o.DO2))
         plot!(f4[k], o.t ./ 60, y, label=k == 1 ? nm : "", color=cl4[nm])
     end
+end
+for (panel, hemorrhage_label, treatment_label, infusion_end_label) in
+    ((f4[1], "Hemorragia (1–11 min)", "Terapia / início NA (20 min)", "Fim da infusão vol. (35 min)"),
+     (f4[2], "", "", ""),
+     (f4[3], "", "", ""),
+     (f4[4], "", "", ""))
+    vline!(panel, [1, 11], label=hemorrhage_label, color=:black, linestyle=:dot, lw=1.5)
+    vline!(panel, [20], label=treatment_label, color=:orange, linestyle=:dot, lw=1.5)
+    vline!(panel, [35], label=infusion_end_label, color=:purple, linestyle=:dot, lw=1.5)
 end
 hline!(f4[1], [85], label="", color=:gray, linestyle=:dot)
 savefig(plot(f4...; layout=(2, 2), size=(1200, 800)), joinpath(FIGDIR, "05_terapias.png"))

@@ -72,6 +72,9 @@ fig = plot(pd.t ./ 60, pd.PAM, seriestype=:scatter, ms=2.5, label="PAM 'medida' 
            color=:gray, size=(950, 480))
 plot!(fig, pd.t ./ 60, y_unc, label="Modelo basal (sem calibrar)", color=:orange, linestyle=:dash)
 plot!(fig, pd.t ./ 60, y_sim, label="Modelo calibrado (Rsa, Vb0)", color=:blue, lw=2.5)
+vline!(fig, [30, 50], label="RL (30–50 min)", color=:green, linestyle=:dot, lw=1.5)
+vline!(fig, [60, 120], label="Noradrenalina (60–120 min)", color=:purple, linestyle=:dot, lw=1.5)
+vline!(fig, [90, 110], label="Sangue (90–110 min)", color=:red, linestyle=:dot, lw=1.5)
 savefig(fig, joinpath(ROOT, "docs", "figuras", "06_calibracao_sintetica.png"))
 
 write(joinpath(ROOT, "docs", "resultados_calibracao.md"), String(take!(OUT)))
