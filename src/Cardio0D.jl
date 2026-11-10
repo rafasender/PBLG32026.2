@@ -31,6 +31,7 @@ export time_mean, cycle_metrics, last_beats, venous_return_curve, cardiac_output
 export guyton_intersection, pv_loop
 # dados e calibração
 export PatientData, load_patient, build_patient, synthetic_patient, write_patient_csv
+export stream_mimic_table, filter_physiological!, PHYSIO_LIMITS
 export read_mimic_table, scenario_from_patient, step_function, linear_function
 export calibrate, simulate_patient, sensitivity_matrix, rmse, settled_state
 export MIMIC_ITEMIDS

@@ -44,3 +44,8 @@ desktop.ini
 *.swp
 /docs/build/
 .julia/
+
+# Dados originais do MIMIC-IV (PhysioNet: proibido redistribuir; tambem excedem o limite do GitHub)
+/data/Dados Mimic/
+*.zip
+*.gz
