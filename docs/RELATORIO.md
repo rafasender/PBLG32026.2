@@ -2,7 +2,7 @@
 
 **Projeto:** PBL 2026.2 · Grupo 3 — *Modelagem 0D do sistema cardiovascular para simulação de choque hipovolêmico e comparação de terapias de reposição volêmica em UTI*
 **Escopo deste relatório:** implementação em Julia do que foi especificado no [CLAUDE.md](../CLAUDE.md) (entregáveis A.2 e partes de B.3 e C.3).
-**Estado:** o modelo roda, está verificado contra soluções analíticas (85 testes passando) e a calibração foi validada com **pacientes sintéticos**. **Nenhum dado real do MIMIC-IV foi usado**; portanto o modelo **ainda não está validado clinicamente**.
+**Estado:** o modelo roda, está verificado contra soluções analíticas (85 testes passando) e a calibração roda com **dados reais do MIMIC-IV** (coorte de choque hipovolêmico, ver [resultados_mimic.md](resultados_mimic.md)); o ajuste é só na janela de cada paciente, sem validação independente, então o modelo **ainda não está validado clinicamente**.
 
 ---
 
@@ -15,11 +15,11 @@
 | [src/mean_model.jl](../src/mean_model.jl) | modelo "lento" (valores médios, 4 volumes + 8 estados extras) e **ponto de funcionamento algébrico** |
 | [src/closed_loop.jl](../src/closed_loop.jl) | modelo pulsátil em malha fechada (6 volumes + fase + 8 extras) |
 | [src/analysis.jl](../src/analysis.jl) | métricas por ciclo, PV loop, curvas de Guyton e interseção |
-| [src/data_io.jl](../src/data_io.jl) | leitura do esquema MIMIC-IV, grade regular, CSV processado, paciente sintético |
+| [src/data_io.jl](../src/data_io.jl) | leitura do MIMIC-IV (streaming), coorte por CID, grade regular, CSV processado |
 | [src/calibration.jl](../src/calibration.jl) | calibração (Optimization.jl), sensibilidade local, estado inicial compensado |
 | [test/runtests.jl](../test/runtests.jl) | 85 testes (V1–V8 + fisiologia + dados) |
 | [scripts/run_model.jl](../scripts/run_model.jl) | gera as figuras e [resultados.md](resultados.md) |
-| [scripts/calibrate_synthetic.jl](../scripts/calibrate_synthetic.jl) | ensaio de calibração e [resultados_calibracao.md](resultados_calibracao.md) |
+| [scripts/pipeline_mimic.jl](../scripts/pipeline_mimic.jl) | coorte MIMIC-IV, calibração por paciente e [resultados_mimic.md](resultados_mimic.md) |
 
 Só foram usados pacotes que **já estavam** no `Project.toml` (nenhuma dependência nova).
 
@@ -55,7 +55,7 @@ Todos os testes passam (`julia --project=. test/runtests.jl`, ~25 s).
 | V7 | Convergência (reltol 1e-6 × 1e-9) | PAM < 0,01 mmHg ✅ |
 | V8 | Faixas fisiológicas do basal | PAM, PAS/PAD, CO, SV, FEVE, PVC dentro da faixa ✅ |
 
-Testes de fisiologia (qualitativos, direção esperada): hemorragia derruba a PAM; o barorreflexo a sustenta e causa taquicardia; RL dilui o Hct e sangue total não; sangue total entrega mais O₂; RL vaza mais para o interstício; o vasopressor eleva a PAM. Testes de dados: leitura do esquema MIMIC (volumes conservados, *forward-fill*), ida e volta pelo CSV, reprodutibilidade do paciente sintético.
+Testes de fisiologia (qualitativos, direção esperada): hemorragia derruba a PAM; o barorreflexo a sustenta e causa taquicardia; RL dilui o Hct e sangue total não; sangue total entrega mais O₂; RL vaza mais para o interstício; o vasopressor eleva a PAM. Testes de dados: leitura do esquema MIMIC (volumes conservados, *forward-fill*), ida e volta pelo CSV, seleção da coorte por CID, calibração reduz o erro.
 
 ## 4. Resultados
 
@@ -105,19 +105,11 @@ Leitura (**qualitativa**, dependente de parâmetros ainda não calibrados):
 
 ![terapias](figuras/05_terapias.png)
 
-### 4.5 Calibração em paciente sintético
+### 4.5 Calibração com dados do MIMIC-IV
 
-Verdade: `Rsa = 1,257`, `Vb0 = 3965 mL`, `EmaxL = 2,21`; PAM a cada minuto por 3 h, ruído de 2 mmHg.
+Ver [resultados_mimic.md](resultados_mimic.md) e a figura 07. A PAM sozinha não identifica `EmaxL` (sensibilidade muito menor que a de `Vb0`), por isso só `Rsa` e `Vb0` são calibrados.
 
-| Parâmetros ajustados | λ | RMSE (mmHg) | erro relativo |
-|---|---|---|---|
-| `Rsa`, `Vb0` | 0 | 1,85 | −0,8 % / −0,8 % |
-| `Rsa`, `Vb0`, `EmaxL` | 0 | 1,85 | −14 % / −1 % / **+132 000 %** |
-| `Rsa`, `Vb0`, `EmaxL` | 0,5 | 1,86 | −10 % / +2 % / +23 % |
-
-Sem calibrar, o RMSE é 3,94 mmHg. O RMSE do ajuste (1,85) fica no nível do ruído (2,0), isto é, o modelo explica os dados. **Mas a PAM sozinha não identifica `EmaxL`** (sensibilidade média 0,015 contra 0,37 de `Vb0`): o ajuste "funciona" com um valor absurdo. É o alerta de Nucci & Cobelli sobre identificabilidade, na prática.
-
-![calibracao](figuras/06_calibracao_sintetica.png)
+![calibracao](figuras/07_calibracao_mimic.png)
 
 ## 5. Problemas encontrados e decisões
 
@@ -144,9 +136,9 @@ Sem calibrar, o RMSE é 3,94 mmHg. O RMSE do ajuste (1,85) fica no nível do ru�
 
 ## 7. Pendências para integrar o MIMIC-IV
 
-1. **Conferir os `itemid`** em [`MIMIC_ITEMIDS`](../src/data_io.jl) contra `d_items`/`d_labitems` da versão instalada (os códigos foram escritos de memória e **não** foram verificados com a base).
+1. ~~Conferir os `itemid`~~: conferidos em `d_items` (ver [`MIMIC_ITEMIDS`](../src/data_io.jl)).
 2. O `labevents` não tem `stay_id`: filtrar por `hadm_id` e janela da UTI antes de chamar `build_patient`.
-3. "Sangue total" quase não existe no MIMIC: o pipeline usa concentrado de hemácias (PRBC) com `hct_blood = 0,40`; para PRBC o hematócrito real é ~0,55–0,65 e deve ser ajustado.
+3. "Sangue total" (221013) tem zero registros no MIMIC-IV: o pipeline usa concentrado de hemácias com `hct_blood = 0,60`.
 4. Hemorragia não é observada: ela entra pelo **volume inicial efetivo `Vb0`**, um parâmetro estimado por paciente.
 5. Definir a coorte e os critérios de exclusão (Frente C), e a tabela de parâmetros com fontes (Frente B), para substituir os valores iniciais do `baseline_params`.
 6. Os dados do MIMIC têm termo de uso da PhysioNet: `data/raw/` e `data/processed/` estão no `.gitignore` e **não devem ser publicados**.
@@ -156,7 +148,7 @@ Sem calibrar, o RMSE é 3,94 mmHg. O RMSE do ajuste (1,85) fica no nível do ru�
 ```bash
 julia --project=. test/runtests.jl              # 85 testes, ~25 s
 julia --project=. scripts/run_model.jl          # figuras 01–05 e docs/resultados.md, ~15 s
-julia --project=. scripts/calibrate_synthetic.jl  # figura 06 e docs/resultados_calibracao.md, ~6 min
+julia --project=. scripts/pipeline_mimic.jl     # figura 07 e docs/resultados_mimic.md, ~1 h (dados locais)
 ```
 
 Uso mínimo no REPL:

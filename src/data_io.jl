@@ -1,25 +1,54 @@
 # src/data_io.jl
 # Entrada de dados: do MIMIC-IV (tabelas brutas) a um `PatientData` em grade regular, e daí a
-# um `Scenario` (funções do tempo) que alimenta a EDO. Também gera pacientes sintéticos para
-# testar todo o fluxo antes do acesso à base.
+# um `Scenario` (funções do tempo) que alimenta a EDO. Também define a coorte (CID de choque
+# hipovolêmico) e os grupos de tratamento.
 #
 # Formato processado (um CSV por internação em data/processed/, tempo em minutos):
 #   t_min, PAM, HR, Hct, rate_rl_mlh, rate_blood_mlh, dose
-# `rate_*` em mL/h (valem do instante da linha até a próxima), `dose` em µg/kg/min.
+# `rate_rl_mlh` = todos os cristaloides (RL, NaCl 0,9% e outros), `rate_blood_mlh` = hemácias;
+# ambos em mL/h (valem do instante da linha até a próxima), `dose` em µg/kg/min.
 
 using Dates: DateTime, DateFormat, Millisecond
 using CodecZlib: GzipDecompressorStream
 
 """
-IDs de item do MIMIC-IV usados pelo projeto. **Conferir em `d_items`/`d_labitems` da versão
-instalada** (os códigos mudam entre versões e hospitais).
+IDs de item do MIMIC-IV usados pelo projeto, conferidos em `d_items`/`d_labitems` da versão
+instalada. `whole_blood` (221013) existe no dicionário mas tem **zero** registros no
+`inputevents` ("Not In Use"): o hemoderivado com volume é o concentrado de hemácias (`prbc`).
 """
 const MIMIC_ITEMIDS = (
     chart = (HR=220045, MAP_invasive=220052, MAP_nibp=220181, SBP=220050, DBP=220051),
-    input = (ringer=225828, saline=225158, prbc=225168, prc_old=220996, whole_blood=221013,
-             norepinephrine=221906),
+    input = (ringer=225828, saline=225158, saline_half=225159, saline_hyper=225161,
+             crystalloid_or=226364, crystalloid_pacu=226375,
+             prbc=225168, prc_old=220996, whole_blood=221013, norepinephrine=221906),
     lab   = (hct=51221, hgb=51222),
 )
+
+"Cristaloides: Ringer lactato, NaCl 0,9%, 0,45%, 3% e cristaloide do centro cirúrgico/RPA."
+const CRYSTALLOID_ITEMS = (225828, 225158, 225159, 225161, 226364, 226375)
+"Hemoderivados com volume: concentrado de hemácias (atual e antigo) e sangue total."
+const BLOOD_ITEMS = (225168, 220996, 221013)
+
+"""
+Códigos de diagnóstico `(versão, prefixo)` da coorte. Choque hipovolêmico: R57.1 (CID-10);
+choque traumático: T79.4 (CID-10) e 958.4 (CID-9). A CID-9 não tem código próprio de choque
+hipovolêmico: ele fica em 785.59 ("outro choque sem menção de trauma").
+"""
+const HYPOVOLEMIC_ICD = ((10, "R571"), (10, "T794"), (9, "78559"), (9, "9584"))
+"Sepse e choque séptico (excluídos da coorte): A40/A41, R65.2x, 038, 995.91/995.92, 785.52."
+const SEPSIS_ICD = ((10, "A40"), (10, "A41"), (10, "R652"),
+                    (9, "038"), (9, "99591"), (9, "99592"), (9, "78552"))
+
+"""
+    hadm_with_icd(diagnoses, codes)
+
+Conjunto de `hadm_id` com algum diagnóstico (`icd_version`, `icd_code`) que comece por um dos
+prefixos de `codes`. O diagnóstico é da alta hospitalar: diz *quem*, não *quando*.
+"""
+function hadm_with_icd(diagnoses, codes)
+    hit(r) = any(r.icd_version == v && startswith(string(r.icd_code), c) for (v, c) in codes)
+    return Set(r.hadm_id for r in eachrow(diagnoses) if hit(r))
+end
 
 """
     PatientData
@@ -60,19 +89,37 @@ function linear_function(ts, ys)
 end
 
 """
-    scenario_from_patient(pd; hct_blood=0.40, baro=true)
+    scenario_from_patient(pd; hct_blood=0.60, baro=true, force_hr=false)
 
-Converte os dados em `Scenario`: infusão total = RL + sangue (mL/s), hematócrito do fluido
-ponderado pela mistura, dose de vasopressor e **FC imposta** (`hr_forced`) com os dados.
+Converte os dados em `Scenario`: infusão total = cristaloide + hemácias (mL/s), hematócrito do
+fluido ponderado pela mistura e dose de vasopressor. `hct_blood = 0,60` é o Hct de um
+concentrado de hemácias (0,55–0,65, CLAUDE.md §7.1), o único hemoderivado com volume
+registrado no MIMIC-IV.
+
+Por padrão a FC **não** é imposta: o barorreflexo do modelo a gera, e a FC medida serve para
+calibrar (é o mesmo modelo que depois prevê outros tratamentos, em que não há FC medida).
+`force_hr=true` impõe a FC dos dados (interpolada).
 """
-function scenario_from_patient(pd::PatientData; hct_blood=0.40, baro=true)
+function scenario_from_patient(pd::PatientData; hct_blood=0.60, baro=true, force_hr=false)
     rl = step_function(pd.t, pd.rl_mlh ./ 3600)
     bl = step_function(pd.t, pd.blood_mlh ./ 3600)
-    hr = linear_function(pd.t, pd.HR)
     return Scenario(Qinf = t -> rl(t) + bl(t),
                     hct_inf = t -> (q = rl(t) + bl(t); q > 0 ? hct_blood * bl(t) / q : 0.0),
                     dose = step_function(pd.t, pd.dose),
-                    hr_forced = hr, baro = baro, tstops = collect(pd.t))
+                    hr_forced = force_hr ? linear_function(pd.t, pd.HR) : nothing,
+                    baro = baro, tstops = collect(pd.t))
+end
+
+"""
+    truncate_patient(pd, tmax)
+
+Parte inicial de `pd` (instantes `t ≤ tmax`, em s): a janela de ajuste quando a calibração é
+validada no restante.
+"""
+function truncate_patient(pd::PatientData, tmax)
+    k = findall(<=(tmax), pd.t)
+    return PatientData(pd.id, pd.t[k], pd.PAM[k], pd.HR[k], pd.Hct[k], pd.rl_mlh[k],
+                       pd.blood_mlh[k], pd.dose[k])
 end
 
 # ------------------------------------------------------------------------ CSV processado
@@ -293,7 +340,7 @@ function build_patient(stay_id, chart, inputs, labs; dt=60.0, t0=nothing, hours=
     thr = [_secs(t, t0) for t in hrdf.charttime]
     tlab = [_secs(t, t0) for t in labs.charttime]
     PAM = [_bin_mean(tmap, mp.valuenum, g, g + dt) for g in grid]
-    HR = _ffill([_bin_mean(thr, hrdf.valuenum, g, g + dt) for g in grid])
+    HR = [_bin_mean(thr, hrdf.valuenum, g, g + dt) for g in grid]      # NaN onde não há medida
     Hct = _ffill([_bin_mean(tlab[findall(==(ids.lab.hct), labs.itemid)],
                             labs.valuenum[findall(==(ids.lab.hct), labs.itemid)], g, g + dt) / 100
                   for g in grid])
@@ -311,8 +358,8 @@ function build_patient(stay_id, chart, inputs, labs; dt=60.0, t0=nothing, hours=
         end
         return rate
     end
-    rl = volume_rate((ids.input.ringer, ids.input.saline))
-    bl = volume_rate((ids.input.prbc, ids.input.prc_old, ids.input.whole_blood))
+    rl = volume_rate(CRYSTALLOID_ITEMS)
+    bl = volume_rate(BLOOD_ITEMS)
     dose = zeros(nbin)
     for r in eachrow(filter(r -> r.itemid == ids.input.norepinephrine, inp))
         s = _secs(r.starttime, t0); e = _secs(r.endtime, t0)
@@ -322,42 +369,3 @@ function build_patient(stay_id, chart, inputs, labs; dt=60.0, t0=nothing, hours=
     end
     return PatientData(string(stay_id), grid, PAM, HR, Hct, rl, bl, dose)
 end
-
-# ---------------------------------------------------------------------- paciente sintético
-"""
-    synthetic_patient(p_true; id, hours=3, dt=60.0, noise=2.0, seed=1, rl=..., blood=..., dose=...)
-
-Gera dados com a **verdade conhecida** para testar a calibração: simula o modelo lento com
-`p_true` (volume inicial deficitário via `Vb0`), com infusões de RL/sangue e noradrenalina em
-degraus (funções `(t_s) -> valor`), e amostra a PAM com ruído gaussiano (`noise` mmHg).
-Devolve `(PatientData, sol)`.
-"""
-function synthetic_patient(p_true; id="sintetico", hours=3.0, dt=60.0, noise=2.0, seed=1,
-                           rl=t -> (1800 <= t < 3000 ? 1500.0 : 0.0),
-                           blood=t -> (5400 <= t < 6600 ? 800.0 : 0.0),
-                           dose=t -> (3600 <= t < 7200 ? 0.1 : 0.0), HR0=95.0)
-    grid = collect(0.0:dt:hours*3600)
-    pd0 = PatientData(id, grid, fill(NaN, length(grid)), fill(HR0, length(grid)),
-                      fill(NaN, length(grid)), rl.(grid), blood.(grid), dose.(grid))
-    sc = scenario_from_patient(pd0)
-    u0 = settled_state(p_true, sc)
-    sol = simulate_mean(p_true, sc, (grid[1], grid[end]); u0, saveat=grid, reltol=1e-6, abstol=1e-6)
-    h = [mean_hemodynamics(p_true, sol(t), sc, t) for t in grid]
-    state = Random_LCG(seed)
-    PAM = [x.Psa + noise * _randn!(state) for x in h]
-    Hct = [x.e.Hct for x in h]
-    pd = PatientData(id, grid, PAM, pd0.HR, Hct, pd0.rl_mlh, pd0.blood_mlh, pd0.dose)
-    return pd, sol
-end
-
-# gerador pseudoaleatório mínimo (evita depender do pacote Random no módulo; reprodutível)
-mutable struct Random_LCG
-    s::UInt64
-end
-Random_LCG(seed::Integer) = Random_LCG(UInt64(seed) * 6364136223846793005 + 1442695040888963407)
-function _rand!(r::Random_LCG)
-    r.s = r.s * 6364136223846793005 + 1442695040888963407
-    return ((r.s >> 11) + 1) / (2.0^53 + 2)
-end
-# Box–Muller
-_randn!(r::Random_LCG) = sqrt(-2 * log(_rand!(r))) * cos(2π * _rand!(r))

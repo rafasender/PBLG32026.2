@@ -278,7 +278,9 @@ esquema MIMIC-IV e calibração. Veja o [relatório](docs/RELATORIO.md) e o guia
 [CLAUDE.md](CLAUDE.md).
 
 ```bash
-julia --project=. test/runtests.jl                 # 85 testes (~25 s)
-julia --project=. scripts/run_model.jl             # figuras e tabelas em docs/
-julia --project=. scripts/calibrate_synthetic.jl   # calibração com paciente sintético (~6 min)
+julia --project=. test/runtests.jl                 # testes V1–V8 + fisiologia + dados (~2 min)
+julia --project=. scripts/run_model.jl             # figuras 01–05 e docs/resultados.md
+julia --project=. scripts/pipeline_mimic.jl        # MIMIC-IV: calibra, testa e prevê; figs. 07–08 (~1h30; dados locais)
+julia --project=. scripts/figuras_mimic.jl         # refaz as figs. 07–08 sem recalibrar
+julia --project=. scripts/prever_paciente.jl       # pergunta PAM, FC e Hct e prevê os 4 tratamentos
 ```

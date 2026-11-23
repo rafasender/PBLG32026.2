@@ -30,11 +30,13 @@ export pulsatile_rhs!, simulate_pulsatile, initial_state_pulsatile, pulsatile_ob
 export time_mean, cycle_metrics, last_beats, venous_return_curve, cardiac_output_curve
 export guyton_intersection, pv_loop
 # dados e calibração
-export PatientData, load_patient, build_patient, synthetic_patient, write_patient_csv
+export PatientData, load_patient, build_patient, write_patient_csv, truncate_patient
 export stream_mimic_table, filter_physiological!, PHYSIO_LIMITS
+export CRYSTALLOID_ITEMS, BLOOD_ITEMS, HYPOVOLEMIC_ICD, SEPSIS_ICD, hadm_with_icd
 export read_mimic_table, scenario_from_patient, step_function, linear_function
-export calibrate, simulate_patient, sensitivity_matrix, rmse, settled_state
+export calibrate, simulate_patient, simulate_patient_series, sensitivity_matrix, rmse, settled_state
 export MIMIC_ITEMIDS
+export TREATMENTS, treatment_scenario, best_treatment
 
 """
     BloodProperties(hct, mu_plasma)
@@ -176,5 +178,6 @@ include("closed_loop.jl")
 include("analysis.jl")
 include("data_io.jl")
 include("calibration.jl")
+include("treatments.jl")
 
 end # module Cardio0D

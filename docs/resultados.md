@@ -16,16 +16,15 @@
 | Cenário | Pms (mmHg) | RAP* (mmHg) | CO* (L/min) |
 |---|---|---|---|
 | Basal | 6.35 | 2.50 | 5.25 |
-| Hemorragia 400 mL | 4.15 | 1.16 | 4.08 |
-| Hemorragia 400 mL + 400 mL de volume | 6.35 | 2.50 | 5.25 |
-| Hemorragia 400 mL + vasoconstrição (TPR×1,5) | 4.15 | 0.91 | 3.76 |
+| Perdeu 400 mL | 4.15 | 1.16 | 4.08 |
+| Perdeu 400 mL e recebeu 400 mL | 6.35 | 2.50 | 5.25 |
+| Perdeu 400 mL + vasoconstrição (resistência ×1,5) | 4.15 | 0.91 | 3.76 |
 
-## 3. Hemorragia classe III (1500 mL em 10 min), barorreflexo ligado × desligado
+## 3. Hemorragia classe III (1500 mL em 10 min), com barorreflexo
 
-| | PAM mín (mmHg) | CO mín (L/min) | FC máx (bpm) | PAM aos 60 min |
-|---|---|---|---|---|
-| Barorreflexo OFF | 34 | 2.18 | 75 | 39 |
-| Barorreflexo ON | 74 | 3.01 | 113 | 82 |
+| PAM mín (mmHg) | CO mín (L/min) | FC máx (bpm) | PAM aos 60 min |
+|---|---|---|---|
+| 74 | 3.01 | 113 | 82 |
 
 ### Classes de hemorragia (barorreflexo ligado, PAM aos 20 min)
 

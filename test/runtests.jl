@@ -248,7 +248,7 @@ end
     @test run(dose=0.1).PAM[2] > nt.PAM[2]                    # vasopressor eleva a PAM
 end
 
-@testset "Dados: leitura do MIMIC (esquema), CSV e paciente sintético" begin
+@testset "Dados: leitura do MIMIC (esquema), coorte por CID, CSV e calibração" begin
     t0 = DateTime(2150, 1, 1, 8, 0, 0)
     at(s) = t0 + Second(s)
     ids = MIMIC_ITEMIDS
@@ -265,14 +265,16 @@ end
     pd = build_patient(7, chart, inputs, labs; dt=60.0)
     @test pd.t == [0.0, 60.0, 120.0, 180.0]
     @test pd.PAM == [60.0, 62.0, 70.0, 75.0]
-    @test pd.HR[1:3] == [110.0, 110.0, 105.0]              # forward-fill
+    @test isequal(pd.HR[1:3], [110.0, NaN, 105.0])         # NaN onde não há medida
     @test isapprox(sum(pd.rl_mlh) * 60 / 3600, 1000.0; atol=1e-9)    # volume conservado
     @test isapprox(sum(pd.blood_mlh) * 60 / 3600, 300.0; atol=1e-9)      # PRBC [120,240) cabe na grade
     @test pd.dose == [0.0, 0.08, 0.08, 0.0]
     @test pd.Hct[1] == 0.40 && pd.Hct[4] == 0.33
     sc = scenario_from_patient(pd)
     @test isapprox(sc.Qinf(90.0), 1000.0 / 120, atol=1e-9)       # mL/s
-    @test sc.hr_forced(0.0) == 110.0
+    @test sc.hr_forced === nothing                                # FC gerada pelo barorreflexo
+    @test scenario_from_patient(pd; force_hr=true).hr_forced(60.0) ≈ 107.5   # interpolada
+    @test truncate_patient(pd, 120.0).t == [0.0, 60.0, 120.0]
 
     # ida e volta pelo CSV processado
     tmp = joinpath(mktempdir(), "p.csv")
@@ -280,23 +282,28 @@ end
     pd2 = load_patient(tmp)
     @test pd2.t == pd.t && pd2.PAM == pd.PAM && pd2.dose == pd.dose
 
-    # paciente sintético é reprodutível e a calibração recupera a verdade
-    ptrue = with_params(P0; Rsa = 1.25 * P0.Rsa, Vb0 = 0.88 * P0.Vb_ref)
-    a, _ = synthetic_patient(ptrue; hours=1.5, dt=120.0, noise=1.5, seed=5,
-                             rl = t -> (900 <= t < 1800 ? 1000.0 : 0.0), blood = t -> 0.0,
-                             dose = t -> 0.0)
-    b, _ = synthetic_patient(ptrue; hours=1.5, dt=120.0, noise=1.5, seed=5,
-                             rl = t -> (900 <= t < 1800 ? 1000.0 : 0.0), blood = t -> 0.0,
-                             dose = t -> 0.0)
-    @test a.PAM == b.PAM
-    r0 = rmse(simulate_patient(P0, a), a.PAM)
-    fit = calibrate(P0, a, [:Rsa, :Vb0]; maxiters=120)
+    # todos os cristaloides (RL + NaCl 0,9%) somam na mesma série; hemácias na outra
+    inputs2 = vcat(inputs, DataFrame(stay_id=[7], starttime=[at(0)], endtime=[at(60)],
+                                     itemid=[ids.input.saline], amount=[200.0], rate=[0.0]))
+    pd3 = build_patient(7, chart, inputs2, labs; dt=60.0)
+    @test isapprox(sum(pd3.rl_mlh) * 60 / 3600, 1200.0; atol=1e-9)
+    @test isapprox(sum(pd3.blood_mlh) * 60 / 3600, 300.0; atol=1e-9)
+
+    # coorte por diagnóstico: choque hipovolêmico (CID-10 e CID-9) e exclusão de sepse
+    dx = DataFrame(hadm_id = [1, 2, 3, 4, 4], icd_version = [10, 9, 10, 10, 10],
+                   icd_code = ["R571", "78559", "I10", "T794XXA", "A419"])
+    @test hadm_with_icd(dx, HYPOVOLEMIC_ICD) == Set([1, 2, 4])
+    @test setdiff(hadm_with_icd(dx, HYPOVOLEMIC_ICD), hadm_with_icd(dx, SEPSIS_ICD)) == Set([1, 2])
+
+    # a calibração (Rsa, Vb0, FC intrínseca; PAM + FC no erro) reduz o erro da PAM no paciente
+    # da tabela acima (PAM 60–75, FC 98–110)
+    r0 = rmse(simulate_patient(P0, pd), pd.PAM)
+    fit = calibrate(P0, pd, [:Rsa, :Vb0, :HR]; w_hr=0.25, maxiters=60)
     @test fit.rmse < r0
-    @test fit.rmse < 2.5
-    # janela curta só com cristaloide: Rsa e Vb0 se compensam (identificabilidade parcial);
-    # o volume inicial é razoavelmente determinado, a resistência só grosseiramente.
-    # Com os parâmetros da B.2 (Csv = 160, mais volume estressado) a PAM é menos sensível ao
-    # volume e a identificabilidade piora: antes 5 %/25 %, agora 15 %/50 % (ver docs/RELATORIO.md).
-    @test isapprox(fit.θ[2], ptrue.Vb0; rtol=0.15)
-    @test isapprox(fit.θ[1], ptrue.Rsa; rtol=0.50)
+    @test all(fit.θ .> 0)
+    @test !isnan(fit.rmse_hr)
+    # com limites, os parâmetros ficam dentro da faixa fisiológica
+    fit2 = calibrate(P0, pd, [:Rsa, :Vb0]; limites=[(0.5, 2.0), (0.9, 1.1)], maxiters=40)
+    @test 0.5 * P0.Rsa <= fit2.θ[1] <= 2.0 * P0.Rsa
+    @test 0.9 * P0.Vb0 <= fit2.θ[2] <= 1.1 * P0.Vb0
 end
